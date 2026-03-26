@@ -1,0 +1,91 @@
+# =============================================================================
+# Module Integration Test Pipeline
+#
+# Validates, applies, and always destroys a module in the dev subscription.
+# Runs against environments/test/ which sources modules from a git ref or
+# registry version — all inputs flat, no env.hcl/app.hcl inheritance.
+#
+# Required CI/CD variables (Settings → CI/CD → Variables)
+# ──────────────────────────────────────────────────────
+#   ARM_CLIENT_ID               Dev service principal app ID        (masked)
+#   ARM_CLIENT_SECRET           Dev service principal secret        (masked)
+#   ARM_TENANT_ID               Azure AD tenant ID                  (masked)
+#   ARM_SUBSCRIPTION_ID         Dev subscription ID                 (masked)
+#   TEST_POSTGRES_ADMIN_PASSWORD  Test DB admin password            (masked)
+#   ARTIFACTORY_HOSTNAME        Artifactory hostname
+#   ARTIFACTORY_REPO            Artifactory Terraform provider repo
+#   ARTIFACTORY_TOKEN           Artifactory identity token          (masked)
+#
+# CI_JOB_TOKEN, CI_PROJECT_ID, and CI_SERVER_HOST are injected automatically.
+# =============================================================================
+
+stages:
+  - validate
+  - apply
+  - destroy
+
+variables:
+  TG_IMAGE:  "alpine/terragrunt:0.67.6"
+  TEST_DIR:  "${CI_PROJECT_DIR}/test"
+
+.base:
+  image: ${TG_IMAGE}
+  before_script:
+    - |
+      cat > /tmp/.terraformrc <<EOF
+      credentials "${ARTIFACTORY_HOSTNAME}" {
+        token = "${ARTIFACTORY_TOKEN}"
+      }
+      credentials "${CI_SERVER_HOST}" {
+        token = "${CI_JOB_TOKEN}"
+      }
+      provider_installation {
+        network_mirror {
+          url = "https://${ARTIFACTORY_HOSTNAME}/artifactory/${ARTIFACTORY_REPO}/"
+        }
+      }
+      EOF
+    - export TF_CLI_CONFIG_FILE=/tmp/.terraformrc
+    - export ARM_CLIENT_ID="${ARM_CLIENT_ID}"
+    - export ARM_CLIENT_SECRET="${ARM_CLIENT_SECRET}"
+    - export ARM_TENANT_ID="${ARM_TENANT_ID}"
+
+# =============================================================================
+# VALIDATE
+# =============================================================================
+
+validate:
+  extends: .base
+  stage: validate
+  script:
+    - cd "${TEST_DIR}"
+    - terragrunt run --all validate
+
+# =============================================================================
+# APPLY
+# Applies the full test environment including networking dependency.
+# =============================================================================
+
+apply:
+  extends: .base
+  stage: apply
+  script:
+    - cd "${TEST_DIR}"
+    - terragrunt run --all apply --auto-approve
+  needs:
+    - validate
+
+# =============================================================================
+# DESTROY
+# Always runs — cleans up even if apply failed.
+# =============================================================================
+
+destroy:
+  extends: .base
+  stage: destroy
+  script:
+    - cd "${TEST_DIR}"
+    - terragrunt run --all destroy --auto-approve --terragrunt-parallelism 1
+  needs:
+    - apply
+  when: always

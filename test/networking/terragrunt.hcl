@@ -7,7 +7,6 @@ include "root" {
 }
 
 terraform {
-  # Source from registry once published, or git ref during development
   source = "tfr://${get_env("CI_SERVER_HOST", "gitlab.com")}/<group>/networking/azurerm?version=~> 1.0"
 }
 

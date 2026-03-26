@@ -1,5 +1,5 @@
-# Integration test config for the module under development.
-# Replace this file's contents with the module being tested.
+# Integration test config for the module under test.
+# Replace <group>, <module-name>, and the version constraint to match the module being tested.
 # All inputs are flat and explicit — no env.hcl or app.hcl inheritance.
 
 include "root" {
@@ -17,22 +17,16 @@ dependency "networking" {
 }
 
 terraform {
-  # During development — source from a specific git ref of the module repo.
-  # Replace <group>, <module-repo>, and <branch-or-tag>.
-  source = "git::https://oauth2:${get_env("CI_JOB_TOKEN", "")}@${get_env("CI_SERVER_HOST", "gitlab.com")}/<group>/<module-repo>.git//.?ref=<branch-or-tag>"
-
-  # Once published to the registry, replace the above with:
-  # source = "tfr://${get_env("CI_SERVER_HOST", "gitlab.com")}/<group>/<module-name>/azurerm?version=1.0.0"
+  source = "tfr://${get_env("CI_SERVER_HOST", "gitlab.com")}/<group>/<module-name>/azurerm?version=~> 1.0"
 }
 
 inputs = {
-  # All inputs explicit — no inheritance from parent configs
   env      = "test"
   app      = "module-test"
   location = "uksouth"
 
   resource_group_name    = "rg-test-<module-name>-uksouth"
-  server_name            = "test-<service>-uksouth"
+  server_name            = "test-<module-name>-uksouth"
   administrator_login    = "psqladmin"
   administrator_password = get_env("TEST_POSTGRES_ADMIN_PASSWORD", "")
 
